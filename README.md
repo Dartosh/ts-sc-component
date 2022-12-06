@@ -1,46 +1,145 @@
-# Getting Started with Create React App
+# Пример реализации компонента интерфейса при помощи sc-web
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+## Подготовка пакета
 
-## Available Scripts
+Документация преполагает, что на вашей локальной машине установлена программная платформа <strong>NodeJS</strong> и пакетный менеджер <strong>npm</strong> (или <strong>yarn</strong>).
 
-In the project directory, you can run:
+Прежде чем приступить к разработке компонента пользовательского интерфейса, для работы с <strong>SC-WEB</strong>,
+необходимо склонировать пакет <strong>'ts-sc-client'</strong> к себе на компьютер ([GitHub-репозиторий и документация к пакету](https://github.com/ostis-ai/ts-sc-client)):
 
-### `npm start`
+    git clone https://github.com/ostis-ai/ts-sc-client.git
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+После того, как покет был склонирован, требуется перейти в только что созданную директорию:
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+    cd ts-sc-client
 
-### `npm test`
+Далее, установка необходимых пакетных зависимостей:
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+    yarn install
 
-### `npm run build`
+или 
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+    npm install
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+Оратите внимание, что вся необходимая конфигурация <strong>Webpack</strong> уже готова, поэтому теперь остаётся лишь собрать пакет с помощью:
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+    yarn build
 
-### `npm run eject`
+или
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+    npm run build
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+На данном этапе подготовка пакета к подключению в будущий компонент готова.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+## Импорт пакета в проектируемый компонент 
 
-## Learn More
+Стоит отметить, что данный пример использует <strong>JavaScript-фреймворк React</strong>, однако вы можете использовать любой другой предпочтительный способ реализации системы пользовательского интерфейса.
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+Принимая во внимания, что на данном этапе ваше приложение уже проинициализировано, необходимо выполнить установку ранее описанного пакета следующим образом:
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+    npm install ../path-to-the-cloned-package
+
+<strong>../path-to-the-cloned-package</strong> - путь к пакету, который вы ранее склонировали (линковка с помощью <strong>npm link</strong> не тестировалась). Работает? Отлично, вот наш пакет и установлен.
+
+
+## Реализация интерфейса
+
+<em>В целом, я рекомендую не делать проектируемую систему напрямую зависимой от импортированного пакета, но вы можете делать свою архитектуры по-своему, поэтому некоторые последующие советы можете подстраивать под свои нужды.</em>
+
+Повторюсь, если вам такой подход к построению архитектуры не нравится, вы можете использовать функционал напрямую, документация к нему находится в репозитории библиотеки.
+
+Создадим новую папку 'utils' внутри директории 'src', в которой, в свою очередь, создаём еще одну директорию 'interfaces' с файлом 'sc-client-handler.interface.ts', или же любым другим способом, который будет давать вам понять, что это интерфейс. Вставляем в этот файл следующее содержимое:
+
+С помощью данного интерфейса наше приложение и будет взаимодействовать с библиотекой 'ts-sc-client'. 
+
+В директории 'utils' создаём файл с именем 'sc-client-handler.class.ts', который будет экспортировать класс, наследуемый от ранее созданного интерфейса. Сперва внесём следующее содержимое и остановимся ненадолго на нем:
+
+```ts
+    // sc-client-handler.class.ts
+    import { ScClient } from 'ts-sc-client';
+
+    import { ScClientHandlerInterface } from './interfaces/sc-client-handler.interface';
+
+    export class ScClientHandler implements ScClientHandlerInterface {
+        private readonly scClient: ScClient;
+
+        constructor(webSocketUrl: string) {
+            this.scClient = new ScClient(webSocketUrl);
+
+            this.scClient.addEventListener("open", this.onConnect)
+            
+            this.scClient.addEventListener("error", this.onError)
+            
+            this.scClient.addEventListener("close", this.onDisconnect)
+        }
+
+        private onConnect(): void {
+            // Коллбэк при установке соединения с БЗ
+        }
+
+        private onError(): void {
+            // Коллбэк при ошибке соединения с БЗ
+        }
+
+        private onDisconnect(): void {
+            // Коллбэк при закрытии соединения с БЗ
+        }
+    }
+```
+
+По-умолчанию ScClient ориентирован на браузерную работу, что в нашем случае и подходит, однако, если вы реализуете API на NodeJs, вам следует вместо предложенного варианта, воспользоваться любой импортированной реализацией технологии Websocket:
+
+```ts
+    import { WebSocket } from "ws";
+
+    const client = new ScClient(new WebSocket('ws://localhost:8090'));
+```
+
+Обычно, URL для работы по websocket с базой знаний 'ws://localhost:8090', однако в вашем случае он может быть иным.
+
+### Создание SC-конструкций
+
+Сперва реализуем создание абстракции над адресом в SC-памяти (далее просто адрес). Обновим импорт (в дальнейшем этот пункт будет пропускаться, очевидно, что об упущенном импорте IDE вас предупредит)::
+
+```ts (ds)
+    //sc-client-handler.class.ts
+    import { ScClient, ScAddr } from 'ts-sc-client';
+```
+
+Создадим в нашем классе поле с модификатором доступа private:
+
+```ts
+    //sc-client-handler.class.ts
+    private readonly scAddresses: Map<number, ScAddr>;
+```
+
+Обновим конструктор:
+
+```ts
+    //sc-client-handler.class.ts
+    import { ScClient, ScAddr } from 'ts-sc-client';
+```
+
+И внесём следующую реализацию:
+
+```ts
+    public createAddress(address: number): ScAddr {
+        const newAddress = new ScAddr(+address);
+
+        if (newAddress.isValid()) {
+            this.scAddresses.set(address, newAddress);
+        }
+
+        return newAddress;
+    }
+```
+
+Теперь подробнее: в классе мы объявили словарь, который будет хранить в себе все объявленные ранее адреса, таким образом мы сможем избежать злокачественного дублирования, однако стоит понимать, что при попытке создать адрес с уже существующим значением, старый будет перезаписан. К тому же, таким образом, мы можем получить доступ по значению адреса к адресам в любой удобный для нас момент времени.
+
+### Создание SC-конструкций
+
+Реализуем методы создания SC-конструкций нашего объявленного ранее интерфейса.
+
+
+<strong>...TODO</strong>

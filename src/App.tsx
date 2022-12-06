@@ -1,24 +1,34 @@
-import React from 'react';
+import React, { useState } from 'react';
 import logo from './logo.svg';
 import './App.css';
+import { ScClient } from 'ts-sc-client';
+// import { WebSocket } from "ws";
 
 function App() {
+  const scClient = new ScClient(new window.WebSocket('ws://localhost:8090'));
+
+  const [connect, setConnect] = useState('Nothing');
+
+  scClient.addEventListener("open", () => {
+    setConnect('Connected');
+    // some logic to inform or proccess socket connection opening
+  })
+
+  scClient.addEventListener("error", () => {
+    setConnect('Errored');
+      // socket connetion resolved with error
+  })
+
+  scClient.addEventListener("close", () => {
+    setConnect('Closed');
+      // socket connetion is closed
+  })
+
   return (
     <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+      <p>
+         {connect}
+      </p>
     </div>
   );
 }
