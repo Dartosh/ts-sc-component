@@ -1,8 +1,11 @@
 # Пример реализации компонента интерфейса при помощи sc-web
 
+### Выполнили: Клинцов Антон, Евгений Нестеров, Кирилушкин Александр
+### Группа: 921702
+
 ## Подготовка пакета
 
-Документация предполагает, что на вашей локальной машине установлена программная платформа <strong>NodeJS</strong> и пакетный менеджер <strong>npm</strong> (или <strong>yarn</strong>).
+Документация преполагает, что на вашей локальной машине установлена программная платформа <strong>NodeJS</strong> и пакетный менеджер <strong>npm</strong> (или <strong>yarn</strong>).
 
 Прежде чем приступить к разработке компонента пользовательского интерфейса, для работы с <strong>SC-WEB</strong>,
 необходимо склонировать пакет <strong>'ts-sc-client'</strong> к себе на компьютер ([GitHub-репозиторий и документация к пакету](https://github.com/ostis-ai/ts-sc-client)):
@@ -96,9 +99,9 @@
     const client = new ScClient(new WebSocket('ws://localhost:8090'));
 ```
 
-Обычно, URL для работы по websocket с базой знаний 'ws://localhost:8090', однако в вашем случае он может быть иным.
+Обычно, URL для работы по websocket с базой знаний 'ws://localhost:8090', однако в вашем случае он может быть иным. Также убедитесь, что на момент запуска приложения SC-сервер запущен.
 
-### Создание SC-конструкций
+### Создание SC-Адреса
 
 Сперва реализуем создание абстракции над адресом в SC-памяти (далее просто адрес). Обновим импорт (в дальнейшем этот пункт будет пропускаться, очевидно, что об упущенном импорте IDE вас предупредит)::
 
@@ -124,22 +127,263 @@
 И внесём следующую реализацию:
 
 ```ts
-    public createAddress(address: number): ScAddr {
+    public createAddress(address: number): ScAddr | null {
         const newAddress = new ScAddr(+address);
 
         if (newAddress.isValid()) {
             this.scAddresses.set(address, newAddress);
+
+            return newAddress;
         }
 
-        return newAddress;
+        return null;
     }
 ```
 
-Теперь подробнее: в классе мы объявили словарь, который будет хранить в себе все объявленные ранее адреса, таким образом мы сможем избежать злокачественного дублирования, однако стоит понимать, что при попытке создать адрес с уже существующим значением, старый будет перезаписан. К тому же, таким образом, мы можем получить доступ по значению адреса к адресам в любой удобный для нас момент времени.
+Теперь подробнее: в классе мы объявили словарь, который будет хранить в себе все объявленные ранее адреса, таким образом мы сможем избежать злокачественного дублирования, однако стоит понимать, что при попытке создать адрес с уже существующим значением, старый будет перезаписан. К тому же, таким образом, мы можем получить доступ по значению адреса к адресам в любой удобный для нас момент времени. Можно заметить, что, при успешном добавлении адресса будет возвращен созданный адрес (т.к. возвращаемая переменная имеет ссылочный тип, её смело можно использовать в вашей бизнес-логике для оперирования), в противном случае - null.
 
-### Создание SC-конструкций
+### Создание контента SC-Ссылки
 
-Реализуем методы создания SC-конструкций нашего объявленного ранее интерфейса.
+Реализуем метод создания контента SC-ссылки:
+
+```ts
+    export class ScClientHandler implements ScClientHandlerInterface {
+        // ...
+        public createLinkContent(content: string, address?: ScAddr) {
+            if (address) {
+                const newScContent = new ScLinkContent(content, ScLinkContentType.String, address);
+
+                this.scLinkContentsByAddresses.set(address.value, newScContent);
+
+                return newScContent;
+            }
+
+            return new ScLinkContent(content, ScLinkContentType.String);
+        }
+        // ...
+    }
+```
+
+Функция возвращает созданный контент, который далее может использоваться в вашей бизнес логике. Также, как можно заметить, что контент сразу же можно прявязать к переданному SC-Адресу. Как можно заметить, при прямой привязке к контенту ссылки, данная связка будет занесена в словарь. Поэтому объявим его и добавим в конструктор, реализуя необходимые методы получения и обновления:
+
+```ts
+    export class ScClientHandler implements ScClientHandlerInterface {
+        // ...
+        private readonly scLinkContentsByAddresses: Map<number, ScLinkContent>;
+        //...
+        constructor(webSocketUrl: string = '') {
+            //...
+            this.scLinkContentsByAddresses = new Map<number, ScLinkContent>();
+            //...
+        }
+        // ...
+        public getScLinkContentByScAddress(address: number): ScLinkContent | undefined {
+            return this.scLinkContentsByAddresses.get(address);
+        }
+        public setScLinkContentByScAddress(address: number, content: ScLinkContent): void {
+            this.scLinkContentsByAddresses.set(address, content);
+        }
+        //...
+        public getScLinkContentsWithScAddresses(): Map<number, ScLinkContent> {
+            return this.scLinkContentsByAddresses;
+        }
+        // ...
+    }
+```
+
+### Создание SC-Конструкций
+
+#### Создание
+
+Далее я предлагаю реализацию создания SC-конструкций в двух вариантах: первый - без хранения конструкций в оперативной памяти (если необходимо создавать конструкции, без дальнейшего использования в будущем) и второй - с хранением конструкций в оперативной памяти (если есть необходимость оперирования над SC-Компонентами в разных компонентах вашего приложения):
+
+```ts
+    export class ScClientHandler implements ScClientHandlerInterface {
+        public createScConstruction(name?: string): ScConstruction {
+            const construction = new ScConstruction();
+
+            if (name) {
+                this.scConstructions.set(name, construction);
+            }
+
+            return construction;
+        }
+    }
+```
+
+Как можно заметить, если, в качестве параметра, будет передано название конструкции, она будет сохранена в словаре и в дальнейшем, при необходимости, может быть получена по названию. При отсутствии же параметра, конструкция будет возвращена без предварительного сохранения. И, соответственно, соответствующий функционал для работы со словарём:
+
+```ts
+    export class ScClientHandler implements ScClientHandlerInterface {
+        // ...
+        private readonly scConstructions: Map<string, ScConstruction>;
+        //...
+        constructor(webSocketUrl: string = '') {
+            //...
+            this.scConstructions = new Map<string, ScConstruction>();
+            //...
+        }
+        // ...
+        public getScConstructionByName(name: string): ScConstruction | undefined {
+            return this.scConstructions.get(name);
+        }
+        // ...
+        public setScConstructionByName(name: string, construction: ScConstruction): void {
+            this.scConstructions.set(name, construction);
+        }
+        // ...
+        public getScConstructionsWithNames(): Map<string, ScConstruction> {
+            return this.scConstructions;
+        }
+        // ...
+    }
+```
+
+### Работа с SC-Конструкцией
+
+<strong>Создание SC-Узла</strong>:
+
+```ts
+    export class ScClientHandler implements ScClientHandlerInterface {
+        // ...
+        public createNodeInScConstruction(construction: ScConstruction | string, nodeName?: string): void {
+            if (typeof construction === 'string') {
+                const findedScConstruction = this.scConstructions.get(construction);
+
+                findedScConstruction?.createNode(ScType.NodeConst, nodeName);
+
+                return;
+            }
+
+            construction.createNode(ScType.NodeConst, nodeName);
+        }
+        // ...
+    }
+```
+
+Обратите внимание, при передаче названия конструкции, в качестве аргумента "construction", будет произведена попытка поиска конструкции из имеющегося списка конструкций, при неудаче, узел не будет добавлен, поэтому стоит это учитывать. При получения доступа к той или иной конструкции (через метод получения по названию из списка нашего класса ("<strong>getScConstructionByName()</strong>") или напрямую, если вы его объявили явно или без сохранения) вы сможете получить тот или иной элемент конструкции (см. документацию библиотеки) (ну, или можете сами реализовать шлюз-версию поиска в нашем классе, если я этого еще не сделал). Необязательным параметром в данном методе вы можете передать название SC-узла.
+
+<strong>Создание SC-Ссылки</strong>:
+
+```ts
+    export class ScClientHandler implements ScClientHandlerInterface {
+        // ...
+        public createLinkInScConstruction(
+            construction: ScConstruction | string,
+            link: ScLinkContent | number,
+            linkName?: string
+        ): void {
+            const linkContent =
+                typeof link === 'number' ?
+                    this.scLinkContentsByAddresses.get(link) :
+                    link;
+
+            if(!linkContent) {
+                return;
+            }
+
+            if (typeof construction === 'string') {
+                const findedScConstruction = this.scConstructions.get(construction);
+
+                findedScConstruction?.createLink(ScType.LinkConst, linkContent, linkName);
+
+                return;
+            }
+
+            construction.createLink(ScType.NodeConst, linkContent, linkName);
+        }
+        // ...
+    }
+```
+
+Аналогичный вариант метода создания, только теперь для SC-Ссылки, в качестве аргумента "construction", передаётся уже существующая конструкция, или название уже ранее сохранённой конструкции. Ранее мы обявляли хранилище для ScLinkContent'ов, поэтому в качестве второго аргумента вы можете передать его адресс. Третий необязательный аргумент - название ссылки.
+
+<strong>Создание SC-Ребра</strong>:
+
+```ts
+    export class ScClientHandler implements ScClientHandlerInterface {
+        // ...
+        public createEdgeInInConstruction(
+            construction: ScConstruction | string,
+            source: ScAddr | string,
+            target: ScAddr | string,
+            edgeName?: string,
+        ) {
+            if (typeof construction === 'string') {
+                const findedScConstruction = this.scConstructions.get(construction);
+
+                findedScConstruction?.createEdge(
+                    ScType.EdgeAccessConstPosPerm,
+                    source,
+                    target,
+                    edgeName,
+                );
+
+                return;
+            }
+
+            construction.createEdge(
+                ScType.EdgeAccessConstPosPerm,
+                source,
+                target,
+                edgeName,
+            ); 
+        }
+        // ...
+    }
+```
+
+В качестве аргумента "construction", передаётся уже существующая конструкция, или название уже ранее сохранённой конструкции. Вторым аргументом передаётся адрес или название первого элемента дуги ("откуда"),  третим - передаётся адрес или название второго элемента дуги ("куда"). Третий необязательный параметр выступает в качестве названия ребра.
+
+#### Выгрузка в БЗ: 
+
+```ts
+    export class ScClientHandler implements ScClientHandlerInterface {
+        // ...
+        public async uploadScElementsToKB(
+            construction: ScConstruction | string,
+        ) {
+            try {
+                if (typeof construction === 'string') {
+                    const findedScConstruction = this.scConstructions.get(construction);
+        
+                    if (!findedScConstruction) {
+                        return;
+                    }
+        
+                    await this.scClient.createElements(findedScConstruction);
+        
+                    return;
+                }
+        
+                await this.scClient.createElements(construction);
+            } catch {
+                throw new Error('Error on upload SC-construction');
+            }
+        }
+        // ...
+    }
+```
+
+Ранее мы давали понять SC-Клиенту по какому URL он может общаться с БЗ, поэтому чтобы гарантировать удовлетворительный результат работы данного метода, стоит проверить браузерную консоль на наличие ошибок (после запуска сервера, разумеется). В данном варианте реализации выгрузки, происходит выгрузка SC-Конструкций, которые, как предполагается, мы ранее инициализировали, налогично с предыдущими методами, имеетася возможность выгрузки по названию сохранённой конструкции или по явной передаче её. 
 
 
-<strong>...TODO</strong>
+Однако, также предоставляется возможность выгрузки SC-Конструкций в виде уже готвого текста, который соответствует синтаксису SCs:
+
+```ts
+    export class ScClientHandler implements ScClientHandlerInterface {
+        // ...
+        public async uploadScElementsBySCs(
+            content: string[],
+        ) {
+            try {
+                await this.scClient.createElementsBySCs(content);
+            } catch {
+                throw new Error('Error on upload SC-constructions');
+            }
+        }
+        // ...
+    }
+```
+
+### Репозиторий с примером: [@Dartosh](https://github.com/Dartosh/ts-sc-component)
